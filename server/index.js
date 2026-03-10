@@ -213,5 +213,9 @@ app.delete('/api/admin/teachers/:id', verifyToken, async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Failed' }); }
 });
 
+// আপনার ফাইলের শেষে গিয়ে এটি বসান:
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 API Server running on port ${PORT}`));
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 API Server is successfully running on port ${PORT}`);
+});
