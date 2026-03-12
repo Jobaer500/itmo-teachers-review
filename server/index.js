@@ -5,6 +5,15 @@ import { createClient } from '@libsql/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
+// 💥 JSON ফাইল পড়ার জন্য নতুন ইম্পোর্ট
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// 💥 ES Module এর জন্য ডিরেক্টরি পাথ সেটআপ
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // শুধুমাত্র লোকাল কম্পিউটারের জন্য .env ব্যবহার করবে
 if (process.env.NODE_ENV !== 'production') {
   dotenv.config();
@@ -69,7 +78,7 @@ const authenticateToken = (req, res, next) => {
 };
 
 // ==========================================
-// 2. Public API Routes (ওয়েবসাইটের জন্য)
+// 2. Public API Routes (ওয়েবসাইটের জন্য)
 // ==========================================
 app.get('/', (req, res) => res.send('🚀 ITMO Teachers Review Backend is LIVE!'));
 
@@ -110,7 +119,51 @@ app.get('/api/teachers', async (req, res) => {
 });
 
 // ==========================================
-// 3. User & Admin Routes
+// 💥 3. Magic Route: JSON থেকে ডাটাবেসে টিচার আপলোড
+// ==========================================
+app.get('/api/seed', async (req, res) => {
+  try {
+    // JSON ফাইলের লোকেশন (src ফোল্ডারের ভেতরে)
+    const filePath = path.join(__dirname, '../src/itmo_teachers_all_departments.json');
+    
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'JSON file not found in src folder' });
+    }
+
+    const data = fs.readFileSync(filePath, 'utf-8');
+    const teachers = JSON.parse(data);
+
+    let count = 0;
+    for (const t of teachers) {
+      // চেক করবে এই টিচার আগে থেকেই ডাটাবেসে আছে কি না
+      const check = await db.execute({ sql: `SELECT id FROM teachers WHERE id = ?`, args: [t.id] });
+      
+      if (check.rows.length === 0) {
+        await db.execute({
+          sql: `INSERT INTO teachers (id, name, department, image, courses, email, phone, profileUrl) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          args: [
+            t.id,
+            JSON.stringify(t.name),
+            JSON.stringify(t.department),
+            t.image || 'N/A',
+            JSON.stringify(t.courses || { ru: [], en: [] }),
+            t.email || 'N/A',
+            t.phone || 'N/A',
+            t.profileUrl || 'N/A'
+          ]
+        });
+        count++;
+      }
+    }
+    res.json({ message: `🎉 Magic Successful! ${count} teachers have been added to the database!` });
+  } catch (err) {
+    console.error('Seeding Error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// 4. User & Admin Routes
 // ==========================================
 app.post('/api/users/register', async (req, res) => {
   try {
