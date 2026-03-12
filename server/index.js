@@ -119,11 +119,10 @@ app.get('/api/teachers', async (req, res) => {
 });
 
 // ==========================================
-// 💥 3. Magic Route: JSON থেকে ডাটাবেসে টিচার আপলোড
+// 💥 Magic Route: JSON থেকে ডাটাবেসে টিচার আপলোড (Ultra Safe)
 // ==========================================
 app.get('/api/seed', async (req, res) => {
   try {
-    // JSON ফাইলের লোকেশন (src ফোল্ডারের ভেতরে)
     const filePath = path.join(__dirname, '../src/itmo_teachers_all_departments.json');
     
     if (!fs.existsSync(filePath)) {
@@ -135,22 +134,22 @@ app.get('/api/seed', async (req, res) => {
 
     let count = 0;
     for (const t of teachers) {
-      // চেক করবে এই টিচার আগে থেকেই ডাটাবেসে আছে কি না
-      const check = await db.execute({ sql: `SELECT id FROM teachers WHERE id = ?`, args: [t.id] });
+      // ⚠️ ডাটাবেসকে ক্রাশ থেকে বাঁচাতে 'undefined' ফিল্টার করা হচ্ছে
+      const safeId = t.id !== undefined && t.id !== null ? String(t.id) : `unknown_${Math.random()}`;
+      const safeName = t.name ? JSON.stringify(t.name) : '{"ru":"Unknown","en":"Unknown"}';
+      const safeDept = t.department ? JSON.stringify(t.department) : '{"ru":"N/A","en":"N/A"}';
+      const safeImage = t.image !== undefined && t.image !== null ? String(t.image) : 'N/A';
+      const safeCourses = t.courses ? JSON.stringify(t.courses) : '{"ru":[],"en":[]}';
+      const safeEmail = t.email !== undefined && t.email !== null ? String(t.email) : 'N/A';
+      const safePhone = t.phone !== undefined && t.phone !== null ? String(t.phone) : 'N/A';
+      const safeUrl = t.profileUrl !== undefined && t.profileUrl !== null ? String(t.profileUrl) : 'N/A';
+
+      const check = await db.execute({ sql: `SELECT id FROM teachers WHERE id = ?`, args: [safeId] });
       
       if (check.rows.length === 0) {
         await db.execute({
           sql: `INSERT INTO teachers (id, name, department, image, courses, email, phone, profileUrl) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          args: [
-            t.id,
-            JSON.stringify(t.name),
-            JSON.stringify(t.department),
-            t.image || 'N/A',
-            JSON.stringify(t.courses || { ru: [], en: [] }),
-            t.email || 'N/A',
-            t.phone || 'N/A',
-            t.profileUrl || 'N/A'
-          ]
+          args: [safeId, safeName, safeDept, safeImage, safeCourses, safeEmail, safePhone, safeUrl]
         });
         count++;
       }
@@ -158,7 +157,7 @@ app.get('/api/seed', async (req, res) => {
     res.json({ message: `🎉 Magic Successful! ${count} teachers have been added to the database!` });
   } catch (err) {
     console.error('Seeding Error:', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message, stack: err.stack });
   }
 });
 
